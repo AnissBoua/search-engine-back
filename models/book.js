@@ -1,24 +1,29 @@
-const { defaultValueSchemable } = require("sequelize/lib/utils");
-
 module.exports = (sequelize, DataTypes) => {
-    const invertedIndexing = sequelize.define('interved_indexing', {
+    const books = sequelize.define('books', {
         id: {
             type: DataTypes.INTEGER,
             primaryKey: true,
             autoIncrement: true,
         },
-        term: {
+        titre: {
             type: DataTypes.STRING,
             allowNull: false,
-            unique: true,
         },
-        list : {
+        authors: {
             type: DataTypes.JSON,
             defaultValue: []
-        }
-    }, {
-        timestamps: false,
+        },
+        summary: {
+            type: DataTypes.STRING,
+        },
+        content : {
+            type: DataTypes.TEXT,
+        },
+        image : {
+            type: DataTypes.STRING,
+            allowNull: true,
+        },
     });
     
-    return invertedIndexing;
+    return books;
 } 
