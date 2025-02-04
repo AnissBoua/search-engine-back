@@ -1,6 +1,7 @@
 const axios = require('axios');
 const cheerio = require('cheerio');
 const fs = require('fs');
+const natural = require('natural');
 
 class BookService {
     static async fetch_content(formats) {
@@ -44,6 +45,11 @@ class BookService {
         fs.writeFileSync(path, data, 'binary');
     
         return path;
+    }
+
+    static tokenize(text) {
+        const tokenizer = new natural.WordTokenizer();
+        return tokenizer.tokenize(text);
     }
 }
 

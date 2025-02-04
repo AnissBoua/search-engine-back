@@ -1,6 +1,7 @@
 const { Router } = require('express');
 const axios = require('axios');
-const { books } = require('../models');
+
+const { books, inverted_indexing } = require('../models');
 const BookService = require('../services/book');
 
 const router = Router();
@@ -20,22 +21,46 @@ router.get('/fetch', async (req, res) => {
 
         data.results = data.results.slice(0, 1);
 
-        console.log(data);
-        
-
         for (const item of data.results) {
             const summary = item.summaries[0];
             const content = await BookService.fetch_content(item.formats);
+            
             const image = await BookService.fetch_image(item.formats, item.title);
-
-            const book = {
+            
+            let book = {
                 titre: item.title,
                 authors: item.authors,
                 summary: summary,
                 content: content,
                 image: image,
             };
-            // await books.create(book);
+            book = await books.create(book);
+
+            const tokens = BookService.tokenize(content);
+            const indexes = {};
+            for (const token of tokens) {
+                if (indexes[token] === undefined) indexes[token] = 1;
+                else indexes[token]++;
+            }
+
+            for (const token in indexes) {
+                const term = await inverted_indexing.findOne({ where: { term: token } });
+                if (term === null) {
+                    await inverted_indexing.create({
+                        term: token,
+                        list: [{
+                            id: book.id,
+                            count: indexes[token],
+                        }],
+                    });
+                } else {
+                    term.list.push({
+                        id: book.id,
+                        count: indexes[token],
+                    });
+                    await term.save();
+                }
+            }
         }
         res.status(200).json(data);
 
