@@ -177,8 +177,8 @@ router.get('/cosine', async (req, res) => {
     res.status(200).json(cosines); 
 });
 
-router.get('/', (req, res) => {
-    books.findAll()
+router.get('/', async (req, res) => {
+    await books.findAll()
         .then(books => {
             res.status(200).json(books);
         })
