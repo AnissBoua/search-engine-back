@@ -2,10 +2,13 @@ const books = require('./routes/books');
 
 const express = require('express');
 const dotenv = require('dotenv');
+const cors = require('cors');
 dotenv.config();
 
 const app = express();
 app.use(express.json());
+app.use(cors());
+
 app.use('/api/books', books);
 
 const models = require('./models');
