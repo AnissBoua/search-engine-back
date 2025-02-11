@@ -23,6 +23,10 @@ module.exports = (sequelize, DataTypes) => {
             type: DataTypes.STRING,
             allowNull: true,
         },
+        page_rank : {
+            type: DataTypes.FLOAT,
+            allowNull: true,
+        },
     });
     
     return books;

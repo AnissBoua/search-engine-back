@@ -14,7 +14,7 @@ app.use('/assets', express.static(path.join(__dirname, 'assets')));
 app.use('/api/books', books);
 
 const models = require('./models');
-models.sequelize.sync().then(() => {
+models.sequelize.sync().then(() => {    
     app.listen(process.env.APP_PORT, () => {
         console.log("Server is running on http://localhost:" + process.env.APP_PORT);
     });

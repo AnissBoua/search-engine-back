@@ -1,5 +1,6 @@
 const { Router } = require('express');
 const axios = require('axios');
+const numeric = require('numeric');
 
 const { books, inverted_indexing, tf_idfs, book_recommendations } = require('../models');
 const BookService = require('../services/book');
@@ -148,7 +149,11 @@ router.get('/cosine', async (req, res) => {
 
     for (const A in documents) {
         for (const B in documents) {
-            if (A < B) {
+            if (parseInt(A) == parseInt(B)) {
+                products[A + '-' + B] = 0;
+                norms[A + '-' + B] = 0;
+            }
+            if (parseInt(A) < parseInt(B)) {
                 let product = 0;
                 let normA = 0;
                 let normB = 0;
@@ -170,12 +175,115 @@ router.get('/cosine', async (req, res) => {
 
     const cosines = {};
     for (const key in products) {
-        cosines[key] = products[key] / norms[key];
+        const [A, B] = key.split('-');
+        if (cosines[A] === undefined) cosines[A] = {};
+        cosines[A][B] = products[key] / norms[key] || 0;
+
+        if (cosines[B] === undefined) cosines[B] = {};
+        cosines[B][A] = products[key] / norms[key] || 0;
+    }
+
+    for (const cos in cosines) {
+        const data = {
+            book_id: cos,
+            recommendations: [],
+        }
+        for (const rec in cosines[cos]) {
+            data.recommendations.push({
+                id: rec,
+                score: cosines[cos][rec],
+            });
+        }
+
+        await book_recommendations.create(data);
     }
 
     
     res.status(200).json(cosines); 
 });
+
+// router.get('/scoring', async (req, res) => {
+//     const cosines = await book_recommendations.findAll();
+//     let copy = {};
+//     // Normalize the columns
+//     for (const cosine of cosines) {
+//         let sum = 0;
+//         copy[cosine.book_id] = {};
+
+//         for (const rec of cosine.recommendations) {
+//             copy[cosine.book_id][rec.id] = rec.score;
+//         }
+//     }
+
+
+//     const sum = {};
+//     for (const row in copy) {
+//         for (const col in copy[row]) {
+//             sum[col] = sum[col] + copy[row][col] || copy[row][col];
+//         }
+//     }
+
+//     for (const row in copy) {
+//         for (const col in copy[row]) {
+//             copy[row][col] = copy[row][col] / sum[col];
+//         }
+//     }
+
+//     const threshold = 0.01;
+//     let iteration = 0;
+//     let norm = Infinity;
+//     let M = copy;
+
+//     while (norm > threshold) {
+//         norm = spectral_norm(M);
+        
+//         if (norm > threshold) {
+//             M = numeric.dot(M, M); // Multiply M * M
+//         }
+        
+//         iteration++;
+//     }
+    
+//     console.log(`Converged after ${iteration} iterations.`);
+//     res.status(200).json(M);
+// });
+
+router.get("/score", async (req, res) => {
+    const recommendations = await book_recommendations.findAll();
+    const matrix = recommendations.map(rec => rec.dataValues);
+        
+    const stochastic_matrix = {};
+    matrix.forEach(book => {
+        const totalScore = book.recommendations.reduce((sum, rec) => sum + rec.score, 0);
+
+        stochastic_matrix[book.book_id] = book.recommendations.map(rec => ({
+            id: rec.id,
+            probability: rec.score / totalScore
+        }));
+    });
+
+    const ranks = BookService.compute_page_rank(stochastic_matrix);
+
+    for (const rank in ranks) {
+        const book = await books.findByPk(rank);
+        book.page_rank = ranks[rank];
+        await book.save();
+    }
+    res.json(ranks);
+});
+
+function spectral_norm(matrix) {
+    // Convert object-based matrix to a 2D array
+    const rows = Object.keys(matrix);
+    const cols = Object.keys(matrix[rows[0]]);
+    let mat = rows.map(row => cols.map(col => matrix[row][col] || 0));
+
+    // Compute Singular Value Decomposition (SVD)
+    const svd = numeric.svd(mat);
+
+    // Return the largest singular value (spectral norm)
+    return Math.max(...svd.S);
+}
 
 router.get('/', async (req, res) => {
     await books.findAll()
@@ -185,6 +293,44 @@ router.get('/', async (req, res) => {
         .catch(error => {
             res.status(500).json({ error: error.message });
         });
+});
+
+router.get('/search', async (req, res) => {
+    let search = req.query.search;
+    if (search === undefined || search === '') {
+        res.status(400).send('Bad Request: search is required');
+    }
+
+    console.log(search);
+    const book = await books.findOne({ where: { titre: search } });
+    if (book !== null) {
+        let recommendations = await book_recommendations.findOne({ where: { book_id: book.id,  } });
+        recommendations = recommendations.recommendations.sort((a, b) => b.score - a.score).map(rec => rec.id).slice(0, 5);
+        recommendations = await books.findAll({ where: { id: recommendations } });
+        recommendations = recommendations.sort((a, b) => b.page_rank - a.page_rank);
+
+        res.status(200).json({ books: [book], recommendations: recommendations });
+        return;
+    }
+
+    search = search.toLowerCase();
+    search = search.split(' ')[0];
+
+    let books_list = await tf_idfs.findOne({ where: { term: search } });
+    if (books_list === null) {
+        res.status(200).json({ books: [], recommendations: [] });
+        return;
+    }
+    books_list = books_list.stats.sort((a, b) => b.count - a.count).map(rec => rec.id).slice(0, 10);
+    books_list = await books.findAll({ where: { id: books_list } });
+    books_list = books_list.sort((a, b) => b.page_rank - a.page_rank);
+
+    let recommendations = await book_recommendations.findOne({ where: { book_id: books_list[0].id,  } });
+    recommendations = recommendations.recommendations.sort((a, b) => b.score - a.score).map(rec => rec.id).slice(0, 5);
+    recommendations = await books.findAll({ where: { id: recommendations } });
+    recommendations = recommendations.sort((a, b) => b.page_rank - a.page_rank);
+
+    res.status(200).json({ books: books_list, recommendations: recommendations });
 });
 
 router.get('/:id', (req, res) => {
