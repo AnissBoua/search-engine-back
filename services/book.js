@@ -14,16 +14,29 @@ class BookService {
         }
     
         if (texte !== null) {
-            const { data } = await axios.get(texte);
-            return data;
+            try {
+                const { data } = await axios.get(texte);
+                if (data) return data;
+
+            } catch (error) {
+                console.log("Error while fetching text content : " + error);                
+            }
         }
     
-        // Html to text
-        const { data } = await axios.get(html);
-        
-        const $ = cheerio.load(data);
-        const text = $('body').text().trim();
-        return text;
+        console.log("No text content found, trying to extract from html : " + html);
+
+        try {
+            // Html to text
+            const { data } = await axios.get(html);
+            
+            const $ = cheerio.load(data);
+            const text = $('body').text().trim();
+            return text;
+        } catch (error) {
+            console.log("Error while fetching html content : " + error);
+        }
+
+        return null;            
     }
 
     static async fetch_image(formats, title) {
@@ -39,12 +52,18 @@ class BookService {
     
         if (image === null) return null;
     
-        const { data } = await axios.get(image, { responseType: 'arraybuffer' });
-        const filename = title.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase() + '-' + Date.now();
-        const path = 'assets/images/' + filename + '.jpg';
-        fs.writeFileSync(path, data, 'binary');
-    
-        return path;
+        try {
+            const { data } = await axios.get(image, { responseType: 'arraybuffer' });
+            const filename = title.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase() + '-' + Date.now();
+            const path = 'assets/images/' + filename + '.jpg';
+            fs.writeFileSync(path, data, 'binary');
+        
+            return path;
+        } catch (error) {
+            console.log("Error while fetching image : " + error);
+        }
+
+        return null;
     }
 
     static tokenize(text) {

@@ -1,7 +1,7 @@
 const { defaultValueSchemable } = require("sequelize/lib/utils");
 
 module.exports = (sequelize, DataTypes) => {
-    const inverted_indexing = sequelize.define('inverted_indexing', {
+    const InvertedIndexing = sequelize.define('InvertedIndexing', {
         id: {
             type: DataTypes.INTEGER,
             primaryKey: true,
@@ -20,5 +20,5 @@ module.exports = (sequelize, DataTypes) => {
         timestamps: false,
     });
     
-    return inverted_indexing;
+    return InvertedIndexing;
 } 

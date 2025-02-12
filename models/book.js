@@ -1,9 +1,13 @@
 module.exports = (sequelize, DataTypes) => {
-    const books = sequelize.define('books', {
+    const Books = sequelize.define('Books', {
         id: {
             type: DataTypes.INTEGER,
             primaryKey: true,
             autoIncrement: true,
+        },
+        api_id: {
+            type: DataTypes.INTEGER,
+            allowNull: false,
         },
         titre: {
             type: DataTypes.STRING,
@@ -29,5 +33,5 @@ module.exports = (sequelize, DataTypes) => {
         },
     });
     
-    return books;
+    return Books;
 } 
