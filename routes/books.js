@@ -5,6 +5,8 @@ const numeric = require('numeric');
 const { Books, InvertedIndexing, tf_idfs, book_recommendations } = require('../models');
 const BookService = require('../services/book');
 
+const natural = require('natural');
+
 const router = Router();
 
 router.get('/', async (req, res) => {
@@ -40,19 +42,49 @@ router.get('/search', async (req, res) => {
 
     let books_list = await tf_idfs.findOne({ where: { term: search } });
     if (books_list === null) {
-        res.status(200).json({ books: [], recommendations: [] });
+        const terms = await InvertedIndexing.findAll({attributes: ['term']});
+    
+        const suggestions = terms.map(term => {
+            return {
+                term: term.term,
+                distance: natural.LevenshteinDistance(search, term.term)
+            }
+        });
+
+        suggestions.sort((a, b) => a.distance - b.distance);
+        res.status(200).json({ books: [], recommendations: [], suggestion: suggestions[0].term });
         return;
     }
 
-    books_list = books_list.stats.sort((a, b) => b.count - a.count).map(rec => rec.id).slice(0, 10);
+    books_list = books_list.stats.sort((a, b) => b.score - a.score).slice(0, 10);
+    const scores = books_list.map(book => {
+        return {
+            id: parseInt(book.id),
+            score: book.score
+        }
+    });
+
+    books_list = books_list.map(id => id.id);
     books_list = await Books.findAll({ where: { id: books_list } });
     
-    const tfidf_coeff = 0.7;
-    const score_coeff = 0.3;
+
+    const coeff = {
+        title: 0.3,
+        author: 0.3,
+        tf_idf: 0.25,
+        score: 0.15,
+
+    }
     books_list = books_list.map(book => {
+        let author = "";
+        for (const a of book.authors) {
+            author += a.name + " ";
+        }
+
         return {
             ...book.dataValues,
-            final_score: (tfidf_coeff * book.score) + (score_coeff * book.page_rank)
+            // final_score: (coeff.tf_idf * book.score) + (coeff.score * book.page_rank)
+            final_score: (coeff.title * natural.JaroWinklerDistance(search, book.titre)) + (coeff.author * natural.JaroWinklerDistance(search, author)) + (coeff.tf_idf * scores.find(score => score.id === book.id).score) + (coeff.score * book.page_rank)
         }
     });
     books_list = books_list.sort((a, b) => b.final_score - a.final_score);
@@ -62,7 +94,7 @@ router.get('/search', async (req, res) => {
     recommendations = await Books.findAll({ where: { id: recommendations } });
     recommendations = recommendations.sort((a, b) => b.page_rank - a.page_rank);
 
-    res.status(200).json({ books: books_list, recommendations: recommendations });
+    res.status(200).json({ books: books_list, recommendations: recommendations, suggestion: "" });
 });
 
 router.get('/:id', (req, res) => {
