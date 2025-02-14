@@ -2,6 +2,7 @@ const { Router } = require('express');
 const axios = require('axios');
 const numeric = require('numeric');
 
+const { Op } = require('sequelize');
 const { Books, InvertedIndexing, tf_idfs, book_recommendations } = require('../models');
 const BookService = require('../services/book');
 
@@ -25,12 +26,11 @@ router.get('/search', async (req, res) => {
         res.status(400).send('Bad Request: search is required');
     }
 
-    // console.log(search);
-    const book = await Books.findOne({ where: { titre: search } });
+    const book = await Books.findOne({ where: { titre: search }, attributes: ['id', 'titre', 'authors', 'page_rank', "image"] });
     if (book !== null) {
         let recommendations = await book_recommendations.findOne({ where: { book_id: book.id,  } });
         recommendations = recommendations.recommendations.sort((a, b) => b.score - a.score).map(rec => rec.id).slice(0, 5);
-        recommendations = await Books.findAll({ where: { id: recommendations } });
+        recommendations = await Books.findAll({ where: { id: recommendations }, attributes: ['id', 'titre', 'authors', 'page_rank', "image"] });
         recommendations = recommendations.sort((a, b) => b.page_rank - a.page_rank);
 
         res.status(200).json({ books: [book], recommendations: recommendations });
@@ -42,17 +42,7 @@ router.get('/search', async (req, res) => {
 
     let books_list = await tf_idfs.findOne({ where: { term: search } });
     if (books_list === null) {
-        const terms = await InvertedIndexing.findAll({attributes: ['term']});
-    
-        const suggestions = terms.map(term => {
-            return {
-                term: term.term,
-                distance: natural.LevenshteinDistance(search, term.term)
-            }
-        });
-
-        suggestions.sort((a, b) => a.distance - b.distance);
-        res.status(200).json({ books: [], recommendations: [], suggestion: suggestions[0].term });
+        res.status(200).json({ books: [], recommendations: [], suggestion: await BookService.suggestions(search) });
         return;
     }
 
@@ -65,7 +55,7 @@ router.get('/search', async (req, res) => {
     });
 
     books_list = books_list.map(id => id.id);
-    books_list = await Books.findAll({ where: { id: books_list } });
+    books_list = await Books.findAll({ where: { id: books_list }, attributes: ['id', 'titre', 'authors', 'page_rank', "image"] });
     
 
     const coeff = {
@@ -91,7 +81,7 @@ router.get('/search', async (req, res) => {
 
     let recommendations = await book_recommendations.findOne({ where: { book_id: books_list[0].id,  } });
     recommendations = recommendations.recommendations.sort((a, b) => b.score - a.score).map(rec => rec.id).slice(0, 5);
-    recommendations = await Books.findAll({ where: { id: recommendations } });
+    recommendations = await Books.findAll({ where: { id: recommendations }, attributes: ['id', 'titre', 'authors', 'page_rank', "image"] });
     recommendations = recommendations.sort((a, b) => b.page_rank - a.page_rank);
 
     res.status(200).json({ books: books_list, recommendations: recommendations, suggestion: "" });

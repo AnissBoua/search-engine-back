@@ -3,6 +3,9 @@ const cheerio = require('cheerio');
 const fs = require('fs');
 const natural = require('natural');
 
+const { InvertedIndexing } = require('../models');
+
+
 class BookService {
     static async fetch_content(formats) {
         let texte = null;
@@ -107,6 +110,22 @@ class BookService {
     
         console.log(ranks);
         return ranks;
+    }
+
+    static async suggestions(search) {
+        const terms = await InvertedIndexing.findAll({attributes: ['term'] });
+    
+        const suggestions = terms.map(term => {
+            const distance = natural.LevenshteinDistance(search, term.term);
+            return {
+                term: term.term,
+                distance: distance
+            }
+        });
+
+        suggestions.sort((a, b) => a.distance - b.distance);
+
+        return suggestions.length > 0 ? suggestions[0].term : "";
     }
 }
 
