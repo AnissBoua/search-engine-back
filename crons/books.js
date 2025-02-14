@@ -7,8 +7,8 @@ const dotenv = require('dotenv');
 dotenv.config();
 
 async function fetching_books() {
-    const pages = 58;
-    const start = 52;
+    const pages = 10;
+    const start = 1;
     const skip = [14005];
 
     for (let page = start; page <= (pages); page++) {
